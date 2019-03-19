@@ -6,3 +6,10 @@ def linear_search(search_list, target_value):
   if matches:
     return matches
   raise ValueError("{0} not in list".format(target_value))
+def linear_search_max(search_list):
+  maximum_score_index = None
+  for idx in range(len(search_list)):
+    print(search_list[idx])
+    if maximum_score_index is None or search_list[idx] > search_list[maximum_score_index]:
+      maximum_score_index = idx
+  return maximum_score_index
