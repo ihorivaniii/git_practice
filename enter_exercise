@@ -1,0 +1,104 @@
+import pandas as pd  # import pandas  library
+import numpy as np  # import numpy library
+from sklearn.linear_model import LinearRegression  # import model for liner regression
+import matplotlib.pyplot as plt  # import matplotlib.plot for visualisations
+
+pd.options.display.max_columns = 30  # change displaying parameters
+pd.options.display.max_colwidth = 500
+
+df = pd.read_csv('AGD_COMPLEX.csv', encoding='windows-1250', keep_default_na=False,
+                 na_values=["0"], low_memory=False)  # Create Data frame with appropriate encoding
+print(df.head())  # Analise data we have
+df.info()  # Analise parameters of data
+
+x = df.iloc[178][-7]  # pick a value with symbols which we need to reduce
+space = x[1]  # symbol to reduce
+df['cena_sprzedazy'] = df['cena_sprzedazy'].apply(lambda col: col.split(' ')[0])  # clearing the data
+df['cena_sprzedazy'] = df['cena_sprzedazy'].apply(lambda col: col.replace(',', '.'))
+df['cena_sprzedazy'] = df['cena_sprzedazy'].apply(lambda col: col.replace(space, ''))
+
+df['cena_sprzedazy'] = pd.to_numeric(df['cena_sprzedazy'])  # transform string to float
+
+df = df.iloc[176:475967].reset_index()  # reduce empty fields without data (cena sprzedazy)
+
+df['Rok_Miesiac'] = df.Rok + df.Miesiac * 0.01  # create new column which represent year and month
+# df.to_csv('AGD_COMPLEX_redact.csv')
+
+gr_by_mean = df.groupby(
+    ['Grupa_produktowa', 'Platnosc', 'Wojewodztwo', 'Rok_Miesiac']).cena_sprzedazy.mean().reset_index()
+gr_by_median = df.groupby(  # grouping data with parameters we need
+    ['Grupa_produktowa', 'Platnosc', 'Wojewodztwo', 'Rok_Miesiac']).cena_sprzedazy.median().reset_index()
+gr_by_min = df.groupby(
+    ['Grupa_produktowa', 'Platnosc', 'Wojewodztwo', 'Rok_Miesiac']).cena_sprzedazy.min().reset_index()
+gr_by_max = df.groupby(
+    ['Grupa_produktowa', 'Platnosc', 'Wojewodztwo', 'Rok_Miesiac']).cena_sprzedazy.max().reset_index()
+gr_by_std = df.groupby(
+    ['Grupa_produktowa', 'Platnosc', 'Wojewodztwo', 'Rok_Miesiac']).cena_sprzedazy.std().reset_index()
+gr_by_mean = gr_by_mean.rename(columns={'cena_sprzedazy': 'sprzedaz_srednia'})
+gr_by_all = gr_by_mean.merge(gr_by_median.rename(columns={'cena_sprzedazy': 'sprzedaz_mediana'})).merge(
+    gr_by_min.rename(columns={'cena_sprzedazy': 'sprzedaz_minimum'})).merge(
+    gr_by_max.rename(columns={'cena_sprzedazy': 'sprzedaz_maximum'})).merge(
+    gr_by_std.rename(columns={'cena_sprzedazy': 'odchylenie_standartowe'}))
+gr_by_all = gr_by_all.fillna(0)  # change NaN to 0
+gr_by_all.info()  # checking data frame after redaction
+
+gr_by_data = df.groupby(['Rok_Miesiac']).cena_sprzedazy.mean().reset_index()  # create data for linear regression
+gr_by_data = gr_by_data.rename(columns={'cena_sprzedazy': 'sprzedaz_srednia'})
+
+gr_by_data_min = df.groupby(['Rok_Miesiac']).cena_sprzedazy.min().reset_index()  # create data for linear regression 1
+gr_by_data_min = gr_by_data_min.rename(columns={'cena_sprzedazy': 'sprzedaz_minimalna'})
+
+X = np.arange(1, 25, 1)  # array which represents Year and month
+X = X.reshape(-1, 1)
+y = gr_by_data.sprzedaz_srednia  # array which represents price.mean
+y_1 = gr_by_data_min.sprzedaz_minimalna  # array which represents price.min
+
+model = LinearRegression()  # Create a linear regression model from scikit-learn
+model_1 = LinearRegression()
+
+model.fit(X, y)  # fit the model to the data by using .fit()
+model_1.fit(X, y_1)
+
+price_prediction = model.predict(X)  # get the predictions from the model object
+min_price_prediction = model_1.predict(X)
+X_future = np.arange(24, 36, 1)  # array which represent future period
+X_future = X_future.reshape(-1, 1)
+future_predict = model.predict(X_future)  # get the future predictions from the model object
+future_predict_1 = model_1.predict(X_future)
+
+tick = gr_by_data['Rok_Miesiac']  # pick series with year and month
+ticks_array = tick.get_values()
+ticks = []  # create list with tick-labels for x axis
+for i in ticks_array:  # simple iteration to fill the sheet with values
+    ticks.append(float(i))
+ticks_future = [2006.0 + i * 0.01 for i in range(1, 13)]
+for i in ticks_future:
+    ticks.append(float(i))
+
+ax = plt.subplot(2, 1, 1)  # Create plot  for visualization of prediction
+ax.set_xticks(range(len(ticks)))  # set ticks
+ax.set_xticklabels(ticks, rotation=40)  # set labels for ticks
+plt.grid()  # set grid
+plt.scatter(X, y, alpha=0.5)  # plot dots which represents mean values
+plt.plot(X, price_prediction)  # plot line which represents line of predictions
+plt.plot(X_future, future_predict, color='green')
+plt.legend(['Sprzedaz srednia', 'Prognozowana sprz.sred.'])  # set attributes of plot
+plt.title('Regresia Liniowa sprzedaz sred.')
+plt.xlabel('Rok Miesiac')
+plt.ylabel('Polski Zloty')
+plt.show()
+
+ax = plt.subplot(2, 1, 2) # same actions for next plot
+ax.set_xticks(range(len(ticks)))
+ax.set_xticklabels(ticks, rotation=40)
+plt.grid()
+plt.scatter(X, y_1, alpha=0.5)
+plt.plot(X, min_price_prediction)
+plt.plot(X_future, future_predict_1, color='red')
+plt.legend(['Sprzedaz minimalna', 'Prognozowana sprz.minim'])
+plt.title('Regresia Liniowa sprzadaz min.')
+plt.xlabel('Rok Miesiac')
+plt.ylabel('Polski Zloty')
+
+plt.show()
+# gr_by_all.to_csv('group_by.csv', index=False) -- create csv with data
